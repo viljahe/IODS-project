@@ -1,13 +1,18 @@
-
 # About the project
 
-*Write a short description about the course and add a link to your GitHub repository here. This is an R Markdown (.Rmd) file so you should use R Markdown syntax.*
+*This course covers the basics of reproducible research with R, Rstudio, and Github. My Github repository can be found here: https://github.com/viljahe/IODS-project*
+
+
 
 ```{r}
-# This is a so-called "R chunk" where you can write R code.
 
 date()
 
 ```
-The text continues here.
+I found this course by browsing courses for doctoral students, trying to find something that would actually benefit me in some way: I'm interested in open science, and while I have been using R for some years, Git is something I'm not yet familiar with but have been wanting to learn for a while now. So this was a good opportunity to do just that.  
 
+I'm looking forward to learning how Git can make my research more open and more reproducible. I hope I can adapt things I learn from this course as a part of my workflow. Three things I'm most looking forward to/goals for myself for this course:
+
+1. Be more familiar and more efficient with RMarkdown, figure out how RMarkdown could benefit my workflow
+2. Get to know Github so that I understand it's capabilities and it doesn't seem quite so scary anymore
+3. Figure out what *else* I should learn in the future: what are the next steps after this course, which tools or skills would benefit me the most
