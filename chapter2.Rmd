@@ -1,13 +1,94 @@
-# Insert chapter 2 title here
+# Linear regression
 
-*Describe the work you have done this week and summarize your learning.*
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods.
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using.
+This week we learned about data wrangling and linear regression. First, we created a data set to be used in the analyses below including creating some summary variables. Then we learned how to conduct a simple multivariate linear regression and how to assess the model diagnostics.
 
-```{r}
-date()
+```{r results='hide', message = FALSE}
+# load the necessary packages and set scientific notation off
+
+options(scipen = 999)
+
+library("GGally")
+library("ggplot2")
+
 ```
 
-Here we go again...
+## Inspecting the data
+
+First, let's load the data set created for this exercise to R and inspect its dimension and structure using `dim()` and `str()`:
+
+```{r}
+
+learning2014 <- read.table("learning2014.txt")
+dim(learning2014)
+str(learning2014)
+
+```
+
+The data contains information from 166 students from an introductory statistics course. Data include participants' gender and age, a measure of global attitudes towards statistics, participants' scored points in the exam, and three variables which reflect deep learning, surface learning, and strategic learning. The three variables are the mean of several original items asking about participant's learning approaches in each of the three categories, and the attitude variable is a mean of ten original variables asking about different attitudes towards statistics.\
+
+
+We can inspect the data and the associations between variables visually using the function `ggpairs()` and look at the most common descriptive statistics with the help of `summary()` to get a more complete grasp of the data.
+
+```{r results='hide', fig.keep='all', message = FALSE, fig.height=6, fig.width=9}
+
+p <- ggpairs(learning2014, 
+             mapping = aes(col = gender, alpha = 0.1), 
+             lower = list(combo = wrap("facethist", bins = 20)),
+             upper = list(continuous = wrap("cor", size = 2.5)),
+             ) + 
+  theme_bw() + 
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(size=5), 
+        axis.text.y = element_text(size=5))
+p
+
+```
+```{r}
+
+summary(learning2014)
+
+```
+
+The data seems to contain more women than men, and the participants are mostly under the age of 30. We can see that there are some differences between men and women on how the variables are distributed, most visibly in the global attitudes towards statistics where men have somewhat higher score on average, and the scores are distributed more evenly for women. Comparing the learning approaches, it would seem that deep learning scores skew a bit more towards the higher scores, whereas strategic scores are distributed more evenly around the middle. For men, the surface learning scores seem to be distributed more evenly than for women who have a more visible peak around the middle values of the variable.\
+
+There is a significant positive correlation between the global attitudes towards statistics and the exam score ($r = .437$), and this is also true for both gender groups. Attitudes towards statistics also seem to be slightly correlated with surface learning with more positive attitude being associated with lower score on surface learning ($r = -.176$), but upon closer inspection, it seems that there is no significant correlation for women, and for men the association is stronger than for all participants' together ($r = -.374$). There is also an expected correlation between surface learning and deep learning, with higher scores on surface learning being associated with lower scores on deep learning ($r = -.324$), but surprisingly this effect is once again mostly driven by a strong association for men ($r = -.622$) whereas for women the learning approaches are not associated with each other.
+
+
+## Linear regression
+
+The associations between variables can be further examined using linear regression. For example, we can see how exam score is explained by the variables that have the strongest correlation with it: attitudes towards statistics, the surface learning approach, and the strategic learning approach.
+
+```{r}
+
+model1 <- lm(points ~ attitude + surf + stra, data = learning2014)
+summary(model1)
+```
+
+Based on the results of the regression, it would seem that more positive attitudes towards statistics is associated with higher scores on the exam ($B = 3.40, p <.001$). This means, that for each one point increase on the scale of attitudes, the exam score increases approximately 3.4 points. The two learning approaches included in the model do not seem to be associated with exam scores. They can therefore be removed from the model.
+
+```{r}
+# remove surf first as it's p-value is the higher of the two
+model2 <- update(model1, ~. -surf)
+summary(model2)
+
+# stra is still not significant, remove it as well
+model3 <- update(model2, ~. -stra)
+summary(model3)
+
+```
+
+With the surface learning approach first removed from the model, the p-value associated with strategic learning approach decreases, but the effect remains non-significant at the traditional significance level of $p < .05$. Removing both non-significant predictors from the model does not affect the association between attitudes towards statistics and exam scores greatly. More positive attitudes towards statistics are associated with higher exam scores, and the magnitude of the effect remains roughly the same ($B = 3.53, p <.001$). The multiple $R^2$ is a measure of goodness-of-fit of our model, i.e. it tells how well our model explains the variance of the dependent variable. From the $R^2$ we can infer that the model explains approximately 19% of the variance of the exam score.
+
+## Model diagnostics
+
+Let's then examine how well our model meets the assumptions of linear regression. We can do this by inspecting diagnostic plots:
+
+```{r fig.height=8, fig.width=10}
+# dev.new(width=7, height=20)
+par(mfrow=c(2,2))
+plot(model3, c(1, 2, 5))
+
+```
+
+In the first figure the residuals are compared to the predicted values of the model. The assumption of constant variance of errors is met as the errors are quite randomly spread. From the QQ-plot we can see, that the errors are reasonably normally distributed, following the dashed line quite well. In the third figure we see that no values have a very high leverage, so this assumption is met as well. Based on these, it can be concluded that there are no significant problems with the model.
