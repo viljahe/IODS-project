@@ -1,4 +1,4 @@
-# Linear regression
+# Regression and model validation
 
 
 This week we learned about data wrangling and linear regression. First, we created a data set to be used in the analyses below including creating some summary variables. Then we learned how to conduct a simple multivariate linear regression and how to assess the model diagnostics.

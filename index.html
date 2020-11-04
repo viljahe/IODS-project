@@ -389,9 +389,9 @@ summary {
 <ul>
 <li><a href="#introduction-to-open-data-science---course-project">Introduction to Open Data Science - Course Project</a></li>
 <li><a href="#about-the-project">About the project</a></li>
-<li><a href="#linear-regression">Linear regression</a><ul>
+<li><a href="#regression-and-model-validation">Regression and model validation</a><ul>
 <li><a href="#inspecting-the-data">Inspecting the data</a></li>
-<li><a href="#linear-regression-1">Linear regression</a></li>
+<li><a href="#linear-regression">Linear regression</a></li>
 <li><a href="#model-diagnostics">Model diagnostics</a></li>
 </ul></li>
 </ul>
@@ -405,7 +405,7 @@ summary {
 <h1>About the project</h1>
 <p><em>This course covers the basics of reproducible research with R, Rstudio, and Github. My Github repository can be found here: <a href="https://github.com/viljahe/IODS-project" class="uri">https://github.com/viljahe/IODS-project</a></em></p>
 <pre class="r"><code>date()</code></pre>
-<pre><code>## [1] &quot;Wed Nov  4 13:25:06 2020&quot;</code></pre>
+<pre><code>## [1] &quot;Wed Nov  4 13:37:33 2020&quot;</code></pre>
 <p>I found this course by browsing courses for doctoral students, trying to find something that would actually benefit me in some way: I’m interested in open science, and while I have been using R for some years, Git is something I’m not yet familiar with but have been wanting to learn for a while now. So this was a good opportunity to do just that.</p>
 <p>I’m looking forward to learning how Git can make my research more open and more reproducible. I hope I can adapt things I learn from this course as a part of my workflow. Three things I’m most looking forward to/goals for myself for this course:</p>
 <ol style="list-style-type: decimal">
@@ -415,11 +415,9 @@ summary {
 </ol>
 <hr />
 </div>
-<div id="linear-regression" class="section level1">
-<h1>Linear regression</h1>
+<div id="regression-and-model-validation" class="section level1">
+<h1>Regression and model validation</h1>
 <p>This week we learned about data wrangling and linear regression. First, we created a data set to be used in the analyses below including creating some summary variables. Then we learned how to conduct a simple multivariate linear regression and how to assess the model diagnostics.</p>
-<pre class="r"><code>date()</code></pre>
-<pre><code>## [1] &quot;Wed Nov  4 13:25:06 2020&quot;</code></pre>
 <pre class="r"><code># load the necessary packages and set scientific notation off
 
 options(scipen = 999)
@@ -474,7 +472,7 @@ p</code></pre>
 </p>
 <p>There is a significant positive correlation between the global attitudes towards statistics and the exam score (<span class="math inline">\(r = .437\)</span>), and this is also true for both gender groups. Attitudes towards statistics also seem to be slightly correlated with surface learning with more positive attitude being associated with lower score on surface learning (<span class="math inline">\(r = -.176\)</span>), but upon closer inspection, it seems that there is no significant correlation for women, and for men the association is stronger than for all participants’ together (<span class="math inline">\(r = -.374\)</span>). There is also an expected correlation between surface learning and deep learning, with higher scores on surface learning being associated with lower scores on deep learning (<span class="math inline">\(r = -.324\)</span>), but surprisingly this effect is once again mostly driven by a strong association for men (<span class="math inline">\(r = -.622\)</span>) whereas for women the learning approaches are not associated with each other.</p>
 </div>
-<div id="linear-regression-1" class="section level2">
+<div id="linear-regression" class="section level2">
 <h2>Linear regression</h2>
 <p>The associations between variables can be further examined using linear regression. For example, we can see how exam score is explained by the variables that have the strongest correlation with it: attitudes towards statistics, the surface learning approach, and the strategic learning approach.</p>
 <pre class="r"><code>model1 &lt;- lm(points ~ attitude + surf + stra, data = learning2014)
@@ -499,7 +497,7 @@ summary(model1)</code></pre>
 ## Residual standard error: 5.296 on 162 degrees of freedom
 ## Multiple R-squared:  0.2074, Adjusted R-squared:  0.1927 
 ## F-statistic: 14.13 on 3 and 162 DF,  p-value: 0.00000003156</code></pre>
-<p>Based on the results of the regression, it would seem that more positive attitudes towards statistics is associated with higher scores on the exam (<span class="math inline">\(B = 3.40, p &lt;.001\)</span>). This means, that for each one point increase on the scale of attitudes, the exam score increases approximately 3.4 points.The two learning approaches included in the model do not seem to be associated with exam scores. They can therefore be removed from the model.</p>
+<p>Based on the results of the regression, it would seem that more positive attitudes towards statistics is associated with higher scores on the exam (<span class="math inline">\(B = 3.40, p &lt;.001\)</span>). This means, that for each one point increase on the scale of attitudes, the exam score increases approximately 3.4 points. The two learning approaches included in the model do not seem to be associated with exam scores. They can therefore be removed from the model.</p>
 <pre class="r"><code># remove surf first as it&#39;s p-value is the higher of the two
 model2 &lt;- update(model1, ~. -surf)
 summary(model2)</code></pre>

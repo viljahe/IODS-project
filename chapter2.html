@@ -365,8 +365,8 @@ summary {
 </div>
 
 
-<div id="linear-regression" class="section level1">
-<h1>Linear regression</h1>
+<div id="regression-and-model-validation" class="section level1">
+<h1>Regression and model validation</h1>
 <p>This week we learned about data wrangling and linear regression. First, we created a data set to be used in the analyses below including creating some summary variables. Then we learned how to conduct a simple multivariate linear regression and how to assess the model diagnostics.</p>
 <pre class="r"><code># load the necessary packages and set scientific notation off
 
@@ -422,7 +422,7 @@ p</code></pre>
 </p>
 <p>There is a significant positive correlation between the global attitudes towards statistics and the exam score (<span class="math inline">\(r = .437\)</span>), and this is also true for both gender groups. Attitudes towards statistics also seem to be slightly correlated with surface learning with more positive attitude being associated with lower score on surface learning (<span class="math inline">\(r = -.176\)</span>), but upon closer inspection, it seems that there is no significant correlation for women, and for men the association is stronger than for all participants’ together (<span class="math inline">\(r = -.374\)</span>). There is also an expected correlation between surface learning and deep learning, with higher scores on surface learning being associated with lower scores on deep learning (<span class="math inline">\(r = -.324\)</span>), but surprisingly this effect is once again mostly driven by a strong association for men (<span class="math inline">\(r = -.622\)</span>) whereas for women the learning approaches are not associated with each other.</p>
 </div>
-<div id="linear-regression-1" class="section level2">
+<div id="linear-regression" class="section level2">
 <h2>Linear regression</h2>
 <p>The associations between variables can be further examined using linear regression. For example, we can see how exam score is explained by the variables that have the strongest correlation with it: attitudes towards statistics, the surface learning approach, and the strategic learning approach.</p>
 <pre class="r"><code>model1 &lt;- lm(points ~ attitude + surf + stra, data = learning2014)
