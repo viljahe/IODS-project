@@ -1,0 +1,189 @@
+# Logistic regression
+
+This week was all about joining two datasets together wrangling and learning logistic regression. Again, in the data wrangling part we created a data set to be used in the analyses below merging two datasets together and creating some new variables. Then we learned how to conduct a logistic regression and assess the predictive power of the model.
+
+```{r results='hide', message = FALSE}
+# load the necessary packages and set scientific notation off
+
+options(scipen = 999)
+
+library("dplyr")
+library("tidyr")
+library("ggplot2")
+library("gridExtra")
+library("Hmisc")
+
+```
+
+## First look at the data
+
+This data consists information about students' alcohol consumption, school performance in two subjects (mathematics and portuguese language), and some background variables relating to their social environment, family, and school. Data has been collected from two Portuguese schools. More information of the data used can be found here: https://archive.ics.uci.edu/ml/datasets/Student+Performance
+
+
+```{r}
+
+alc <- read.csv("alc.csv", sep=",", header=TRUE)
+
+colnames(alc)
+```
+The data has been merged from two separate datasets, one specifically for math and other for portuguese language. The background variables are equal between the two original datasets, but the variables relating to school performance (failures, paid, absences, G1, G2, and G3) on these two subjects differ. These variables are the number of past class failures (failures), whether or not student has had extra paid classes (paid), number of absences (absences), and the first, second, and final grades (G1-G3, respectively). The final dataset used here therefore has three separate variables for each subject specific original variable: the two original variables denoted by either .p (for Portuguese) or .m (for math) and one that is the mean of the two original variables (without suffix).
+
+I chose to examine how time spent on studies weekly (studytime), parents' cohabitation status (Pstatus), number of school absences (absences) and the mean of the final grades in math and Portuguese (G3) affect whether student's alcohol consumption is high or low (high_use). Study time is a discrete variable with 4 categories: less than 2 hours (1), 2-5 hours (2), 5-10 hours (3), and more than 10 hours (4). Parents' cohabitation status has two possible values: living together (T) and living apart (A). Number of school absences is a continuous variable ranging from 0 to 93, and alcohol consumption is a categorical variable based on the mean of workday alcohol consumption and weekend alcohol consumption: those with mean of the two variables higher than 2 (ranging from 1, "very low", to 5 "very high") have been categorized as having high alcohol consumption.
+
+My hypotheses are that more time spent on studying and higher grades are connected to low alcohol consumption, while higher number of absences and parents living apart are connected to high alcohol consumption.
+
+## Distributions and relationships between variables
+
+Let's have a closer look at the chosen variables and how they relate to each other.
+
+```{r}
+# subset for only relevant variables
+alc.sub <- subset(alc, select = c(studytime, absences, G3, Pstatus, high_use))
+
+# see numerical summaries of variables
+summary(alc.sub[(-4)])
+table(alc.sub["Pstatus"])
+
+# barplots for the distributions
+
+# library(purrr)
+
+numplot <- alc.sub[c("G3", "studytime", "absences")]  %>% gather() %>% ggplot(aes(as.numeric(value))) + facet_wrap("key", scales = "free") + geom_bar() + xlab("value") + theme_bw() + theme(strip.background = element_rect(fill = "white"))
+
+
+discplot <- alc.sub[c("Pstatus", "high_use")]  %>% gather() %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() + theme_bw() + theme(strip.background = element_rect(fill = "white"))
+
+grid.arrange(numplot, discplot, nrow=2)
+
+
+
+```
+
+We can see that most of the students have quite low number of absences, with a few outliers who have over 40. The mean of the final grades is 11.5, and the distribution is somewhat skewed towards higher grades. Study time is mostly below 5 hours per week. There are around 1.5 times more of those whose alcohol consumption is categorized as low compared to high and most students' parents live together.
+
+```{r}
+
+# box plots for alcohol use vs. continuous variables
+
+box1 <- ggplot(alc.sub, aes(x = high_use, y = G3)) + 
+  geom_boxplot() + 
+  ylab("grade") +
+  ggtitle("Alcohol use and final grades") +
+  theme_bw()
+
+box2 <- ggplot(alc.sub, aes(x = high_use, y = absences)) + 
+  geom_boxplot() + 
+  ylab("absences") +
+  ggtitle("Alcohol use and absences") + 
+  theme_bw()
+
+# bar plots for alcohol use vs. discrete variables
+
+bar1 <- alc.sub %>% ggplot(aes(x = studytime, fill = high_use)) + 
+  geom_bar(position = "dodge") + 
+  xlab("Study time") +
+  ggtitle("Alcohol use and study time") + 
+  theme_bw()
+
+bar2 <- alc.sub %>% ggplot(aes(x = Pstatus, fill = high_use)) + geom_bar(position = "dodge") +
+  xlab("Parental status") +
+  ggtitle("Alcohol use and parental status") +
+  theme_bw()
+
+
+# draw the plots
+
+grid.arrange(box1, box2, bar1, bar2, ncol=2)
+
+```
+
+From the initial glance it doesn't seem like alcohol use and mean of the final grades or number of absences are connected. The study time per week seems to be a bit lower for those whose alcohol consumption is high, and those whose parents live apart might be overrepresented in high alcohol users as well, although as the number of parents living apart in this data is very low it's hard to draw any definite conclusions based on these figures alone.
+
+```{r}
+
+# correlations for numerical variables
+
+corrs <- rcorr(as.matrix(alc.sub[(-4)]))
+corrs
+
+# crosstabs for parental status and high use
+
+table(alc.sub[c("Pstatus", "high_use")])
+
+```
+
+The `rcorr()` function prints us the correlations and the associated p-values of the variables. We can see that both study time and absences are statistically significantly correlated with alcohol use, with more time spent on studies being associated with low alcohol consumption ($r = -.21, p<.001$) and higher number of absences with high alcohol consumption ($r = .22, p<.001$). This would seem to support my hypotheses. Higher grades are also associated with more time spent on studying ($r = .17, p<.001$), but not statistically significantly to alcohol use. Although the direction of the association between mean of final grades and alcohol use is in line with the hypothesis.\
+
+The proportion of high alcohol users in both parental residential status groups is approximately the same, which does not support my hypothesis.
+
+## Logistic regression
+
+We can then use logistic regression to see if the results support my hypotheses.
+
+```{r message = FALSE}
+# first, specify studytime as factor as it is actually a categorical variable
+alc.sub$studytime <- as.factor(alc.sub$studytime)
+
+# specify model
+model1 <- glm(high_use ~ studytime + absences + G3 + Pstatus, data = alc.sub, family = "binomial")
+
+# print summary
+modelsum1 <- summary(model1)
+
+modelsum1
+
+# retrieve odds ratios, confidence intervals and p-values
+OR <- coef(model1) %>% exp()
+CI <- confint(model1) %>% exp()
+p <- coef(modelsum1)[,4]
+
+# print table of odds ratios, confidence intervals and p-values
+cbind(OR, CI, p) %>% round(3)
+
+```
+
+In the specified model, weekly study time and absences are both associated statistically significantly to alcohol use. Those who study 5-10 hours ($OR = 0.26, CI = 0.10, 0.59, p =.002$) and over 10 hours per week ($OR = 0.28, CI = 0.08, 0.80, p =.028$) are less likely to be high alcohol users than those who study less than 5 hours per week, while those with more absences are more likely to be high alcohol users ($OR = 1.08, CI = 1.04, 1.13, p <.001$). The mean of final grades and parental status are not associated with alcohol use.\
+
+The hypotheses regarding study time and absences was confirmed, but the results don't support the hypotheses about final grades and parental residential status being associated with alcohol use.
+
+## Predictive power of the model
+
+Only two of the hypothesized variables were connected to alcohol use. Let's see how well a model which includes these two variables predicts alcohol use.
+
+```{r}
+
+model2 <- update(model1,.~. -G3 -Pstatus)
+summary(model2)
+
+# predict() the probability of high_use
+probabilities <- predict(model1, type = "response")
+
+# add the predicted probabilities to 'alc'
+alc.sub <- mutate(alc.sub, probability = probabilities)
+
+# use the probabilities to make a prediction of high_use
+alc.sub <- mutate(alc.sub, prediction = ifelse(probability > 0.5, T , F))
+
+# 2x2 cross table of alcohol use vs. the predictions
+table(high_use = alc.sub$high_use, prediction = alc.sub$prediction)
+```
+
+From the crosstabulation, we can see that the majority fall into the category where both predicted and actual alcohol use was low. Of the actual high alcohol users, most were predicted to be low alcohol users. All together, 93 persons were wrongly classified as low alcohol users, and 12 persons were wrongly classified as high alcohol users. This is not very surprising, given that the number belonging to each category in our data was very unequal, with most students being low alcohol users.\
+We can also examine predictions and actual alcohol use visually by drawing a scatterplot, and calculate the percentage of wrongly categorized individuals: 
+
+```{r}
+# explore the predictions graphically
+g.pred <- ggplot(alc.sub, aes(x = probability, y = high_use, col = prediction))
+g.pred + geom_point(alpha = 0.5) + geom_jitter(height=0.1) + theme_bw()
+
+# calculate and print the total proportion of wrong classifications
+prop_wrong <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  perc <- sum(n_wrong)/length(class) * 100
+  print(paste(round(perc,2), "% classified wrong"))
+}
+
+prop_wrong(class = alc.sub$high_use, prob = alc.sub$probability)
+
+```
+The percentage of wrongly categorized individuals based on our model is 28.38 %. Although this number is quite high, it is notably better than simply guessing which would result in approximately 50% wrong guesses.
