@@ -1,0 +1,268 @@
+# Clustering and classification
+
+
+This week we learned about clustering and classification methods.
+
+```{r results='hide', message = FALSE}
+# load the necessary packages and set scientific notation off
+
+options(scipen = 999)
+
+library("MASS")
+library("ggplot2")
+library("dplyr")
+library("GGally")
+
+```
+
+
+## Overview of the data
+
+In this week analyses we use the `Boston` dataset from `Mass` package. The data describes housing values in suburbs of Boston from the 1970s. More information can be found here: https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/Boston.html
+
+    
+```{r}
+
+# load the data
+
+data("Boston")
+
+# explore the structure and dimensions
+str(Boston)
+dim(Boston)
+
+```
+The Boston data consists 506 observations and 14 variables, which include town's per capita crime rate, a number of variables reflecting the average socioeconomic status of the area and the demographics or the residents, general information about the location (e.g. proximity highways and the Charles River) and air quality.
+
+Let's have a closer look at the data and the variables.
+
+```{r results='hide', fig.keep='all', message = FALSE, fig.height=6, fig.width=9}
+
+plot1 <- ggpairs(Boston, 
+             mapping = aes(alpha = 0.1),
+             lower = list(continuous = wrap("points", size = 0.3)),
+             upper = list(continuous = wrap("cor", size = 2.5)),
+             ) + 
+  theme_bw() + 
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(size=4), 
+        axis.text.y = element_text(size=5))
+
+plot1
+```
+
+```{r}
+summary(Boston)
+```
+Some of the variables are very heavily skewed towards lower values, most notably *crim* (the per capita rate by town), *zn* (proportion of residential land zoned for large lots) and *chas* (a dummy variable describing whether or not the area is next to the Charles River). Therefore the data consists of areas that mostly have low crime rates, smaller residential lots, and are not next to the river. The variables *dis* (distance to employment centers) and *lstat* (percent of the lower status of the population) are also skewed towards the lower values, so most areas are close to the employment centers and have a low percent of low status residents. On the other hand, variables *age*, *ptratio*, and *black* are skewed towards higher values, meaning the data includes more areas with older houses, high pupil-teacher ratio, and fewer black people. A couple of variables have very clear two peaks: *indus* (proportion of non-retail business acres), *rad* (accessibility to radial highways), and *tax* (property tax-rate). The variable *nox*, describing the nitrogen oxides concentration also has mostly quite low values, while *medv*, median value of owner-occupied homes, has its peak around the middle values.\
+
+There are a number of substantial correlations between the variables, and we can instantly see some interesting patterns in the data from the scatterplots, e.g. the nitrogen oxides concentration seems to be higher when the houses in the area are older, and lower when the distance to the employment centres is higher, and higher percent of the population that is of lower status seems to be associated with a decrease in the median value of owner-occupied homes. Nothing too surprising.\
+
+## Standardizing the data & creating train and test datasets
+
+Next we can standardize the data using the function `scale`.
+
+```{r}
+
+boston_scaled <- scale(Boston)
+
+summary(boston_scaled)
+
+```
+This takes each value, calculates the difference between it and the variable mean, and divides it by the standard deviation of the variable. The scaled values represents by how many standard deviations does the observation differ from the variable mean. The means of each scaled variables is now 0 and the values that were originally below the mean are negative, and values above the mean are positive. For example, the maximum value of crime rates in the original data is `r max(Boston$crim)`, which is `r max(Boston$crim) - mean(Boston$crim)` above the mean: the standard deviation of crime rates is `r sd(Boston$crim)`, so the maximum value is `r max(Boston$crim)-mean(Boston$crim)` / `r sd(Boston$crim)` = `r (max(Boston$crim)-mean(Boston$crim)) / sd(Boston$crim)` above the mean. This is the new maximum value in the scaled data.\
+
+Let's then replace the crime rate variable with a categorical variable of the crime rate using quantiles as the break points.
+
+```{r}
+
+# change the class to dataframe
+boston_scaled <- as.data.frame(boston_scaled)
+
+# define the breaks
+bins <- quantile(boston_scaled$crim)
+
+# create the categorical variable
+boston_scaled$crime <- cut(boston_scaled$crim, breaks = bins, include.lowest = TRUE, labels = c("low", "med_low", "med_high", "high"))
+
+# remove the original crime rate variable
+boston_scaled <- dplyr::select(boston_scaled, -crim)
+
+```
+
+## Linear discriminant analysis
+
+First, we will divide the dataset to train and test sets: we will first use the train set to do train our classification model and then see how well our model can predict the classes in the test dataset.
+
+```{r}
+
+# choose randomly 80% of the rows in the data for the train set
+ind <- sample(nrow(boston_scaled),  size = nrow(boston_scaled) * 0.8)
+
+# create train set
+train <- boston_scaled[ind,]
+
+# create test set
+test <- boston_scaled[-ind,]
+
+```
+
+Next, we will fit the linear discriminant analysis on the train set using the categorical crime rate variable `crime` as the target variable, and all the other variables as predictors.
+
+```{r}
+
+# Fit the model
+lda.crime <- lda(crime ~., data = train)
+
+lda.crime
+
+# Draw the LDA biplot
+
+# target classes as numeric
+classes <- as.numeric(train$crime)
+
+# the function for lda biplot arrows
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "black", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+
+# define the colors for the plot from green (low) to red (high)
+cols <- c("green", "blue", "purple", "red")
+cols1 <- cols[classes]
+
+# plot the lda results
+plot(lda.crime, dimen= 2, col = cols1, pch = classes)
+lda.arrows(lda.crime, myscale = 2)
+
+
+```
+
+We can see from the plot that high crime rates cluster together very clearly separate from the other categories. The other categories also form clusters, although there is much more overlap between the categories. The arrows show that the variable `rad` (the accessibility of radial highways) contributes most to the separation of the groups: those in the high crime rate group also have clearly higher values on this variable compared to other groups. Variables `zn` and `nox` seem to contribute more to the separation between the low, medium low, and medium high groups, with higher nitrogen oxides levels being related to higher crime rates, and proportion of large residential plots being related to lower crime rates. The same can be seen from the table of group means.
+
+
+## Predictions
+
+```{r}
+
+# save crime rate categories from test data
+correct_classes <- test$crime
+
+# remove original crime rate categories
+test <- dplyr::select(test, -crime)
+
+# predict classes with the model on the test data
+lda.pred <- predict(lda.crime, newdata = test)
+
+# crosstabulate results
+table(correct = correct_classes, predicted = lda.pred$class)
+
+```
+
+
+It looks like that the predictions are pretty good: in all categories, the correct predictions are in the majority. The "high" group was predicted most accurately, which can also be seen from the previous plot, as the high values formed most clearly a separate cluster.
+
+## K-means clustering
+
+Let's reload the Boston data, standardize it again, inspect the distances, and run the k-means algorithm on this data.
+
+```{r}
+
+# reload the Boston data
+data("Boston")
+
+# standardize the dataset
+boston_scaled <- scale(Boston)
+
+# calculate distances between observations
+dist_eu <- dist(boston_scaled)
+summary(dist_eu)
+
+# run the k-means algorithm
+km <- kmeans(boston_scaled, centers = 4)
+km
+```
+
+
+The k-means algorithm needs the number of clusters to be specified. I chose 4 clusters at random, but there is a better way to determine the appropriate number of clusters. We can do this by inspecting the total within cluster sum of squares (TWCSS):
+
+```{r}
+
+set.seed(42)
+
+# determine the maximum number of clusters
+k_max <- 10
+
+# calculate the total within sum of squares
+twcss <- sapply(1:k_max, function(k){kmeans(boston_scaled, k)$tot.withinss})
+
+# visualize the results
+qplot(x = 1:k_max, y = twcss, geom = 'line')
+
+```
+
+The plot shows TWCSS on y-axis and how it changes with the number of clusters on x-axis. Here I chose to plot the TWCSS for 1-10 clusters (as it is very unlikely that the solution would be better for a larger number of clusters). The rule of thumb for choosing the appropriate number of clusters is to find a "knot" in the line, e.g. the point where there is a big drop in the TWCSS. In this case, it seems that 2 is a good number of clusters.\
+
+Let's run the k-means algorithm with two clusters.
+
+```{r}
+
+# k-means clustering
+km <- kmeans(boston_scaled, centers = 2)
+km
+
+```
+
+```{r results='hide', fig.keep='all', message = FALSE, fig.height=6, fig.width=9}
+
+# plot the Boston dataset with clusters
+
+boston_scaled <- as.data.frame(boston_scaled)
+
+plot2 <- ggpairs(boston_scaled, 
+             mapping = aes(col = as.factor(km$cluster), alpha = 0.1),
+             lower = list(continuous = wrap("points", size = 0.1)),
+             upper = "blank",
+ switch = "both")+ 
+  theme_bw() + 
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(size=4), 
+        axis.text.y = element_text(size=5))
+
+plot2
+
+```
+
+We can see that cluster 1 is described by somewhat higher crime rates and distinctively lower amount of large residential plots, higher nitrogen oxides concentration and more older buildings. It also contains areas with shorter distance to employment centres, higher accessibility to highways and property tax rate, as well as higher pupil-teacher ratio, and higher percent of lower status population. Cluster 2 seems to have low crime rate, high proportion of large residential plots, lower amount of non-retail business land, and lower nitrogen oxides concentration, as well as lower accessibility to highways, and lower number of blacks and percent of  low status population. In short, our two clusters seem to describe two types of areas, one with generally more desirable attributes for a residential area and quite likely residents of higher socioeconomic status, and other with less desirable attributes and residents of lower socioeconomic status. If I would have to guess, I'd say these areas probably differ in their proximity to the city proper, with cluster 1 describing more urban areas and cluster 2 describing more suburban areas.
+
+## Bonus: LDA with k-means clusters as target classes
+
+For bonus points, let's perform k-means on the original standardized Boston dataset, and then perform LDA using the clusters as target classes.
+
+```{r}
+# run k-mean with 3 clusters
+km3 <- kmeans(boston_scaled, centers = 3)
+
+# add the clusters as a variable to the data
+boston_scaled$cluster <- km3$cluster
+
+# run lda with clusters as the target
+lda.clust <- lda(cluster ~., data = boston_scaled)
+
+lda.clust
+
+# define the colors for the plot
+cols <- c("green", "blue", "purple")
+cols1 <- cols[boston_scaled$cluster]
+
+# plot the lda results
+plot(lda.clust, dimen= 2, col = cols1, pch = cols1)
+lda.arrows(lda.clust, myscale = 3)
+
+```
+
+The LDA seems to separate the clusters pretty well. From the plot we can see that the proportion of black residents is perhaps the most influential together with crime rate and proportion of non-retail business acres. Cluster 1 is best described as having a low proportion of black residents, low crime rate and low proportion of non-retail business acres. Cluster 2 also has low proportion of black residents and lower crime rate, but high proportion of non-retail business acres. Cluster 3 has higher proportion of black residents, high crime rate and high proportion of non-retail business acres.
+
