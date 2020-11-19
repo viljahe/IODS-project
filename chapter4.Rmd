@@ -54,7 +54,7 @@ plot1
 ```{r}
 summary(Boston)
 ```
-Some of the variables are very heavily skewed towards lower values, most notably *crim* (the per capita rate by town), *zn* (proportion of residential land zoned for large lots) and *chas* (a dummy variable describing whether or not the area is next to the Charles River). Therefore the data consists of areas that mostly have low crime rates, smaller residential lots, and are not next to the river. The variables *dis* (distance to employment centers) and *lstat* (percent of the lower status of the population) are also skewed towards the lower values, so most areas are close to the employment centers and have a low percent of low status residents. On the other hand, variables *age*, *ptratio*, and *black* are skewed towards higher values, meaning the data includes more areas with older houses, high pupil-teacher ratio, and fewer black people. A couple of variables have very clear two peaks: *indus* (proportion of non-retail business acres), *rad* (accessibility to radial highways), and *tax* (property tax-rate). The variable *nox*, describing the nitrogen oxides concentration also has mostly quite low values, while *medv*, median value of owner-occupied homes, has its peak around the middle values.\
+Some of the variables are very heavily skewed towards lower values, most notably `crim` (the per capita rate by town), `zn` (proportion of residential land zoned for large lots) and `chas` (a dummy variable describing whether or not the area is next to the Charles River). Therefore the data consists of areas that mostly have low crime rates, smaller residential lots, and are not next to the river. The variables `dis` (distance to employment centers) and `lstat` (percent of the lower status of the population) are also skewed towards the lower values, so most areas are close to the employment centers and have a low percent of low status residents. On the other hand, variables `age`, `ptratio`, and `black` are skewed towards higher values, meaning the data includes more areas with older houses, high pupil-teacher ratio, and fewer black people. A couple of variables have very clear two peaks: `indus` (proportion of non-retail business acres), `rad` (accessibility to radial highways), and `tax` (property tax-rate). The variable `nox`, describing the nitrogen oxides concentration also has mostly quite low values, while `medv`, median value of owner-occupied homes, has its peak around the middle values.\
 
 There are a number of substantial correlations between the variables, and we can instantly see some interesting patterns in the data from the scatterplots, e.g. the nitrogen oxides concentration seems to be higher when the houses in the area are older, and lower when the distance to the employment centres is higher, and higher percent of the population that is of lower status seems to be associated with a decrease in the median value of owner-occupied homes. Nothing too surprising.\
 
@@ -237,32 +237,3 @@ plot2
 ```
 
 We can see that cluster 1 is described by somewhat higher crime rates and distinctively lower amount of large residential plots, higher nitrogen oxides concentration and more older buildings. It also contains areas with shorter distance to employment centres, higher accessibility to highways and property tax rate, as well as higher pupil-teacher ratio, and higher percent of lower status population. Cluster 2 seems to have low crime rate, high proportion of large residential plots, lower amount of non-retail business land, and lower nitrogen oxides concentration, as well as lower accessibility to highways, and lower number of blacks and percent of  low status population. In short, our two clusters seem to describe two types of areas, one with generally more desirable attributes for a residential area and quite likely residents of higher socioeconomic status, and other with less desirable attributes and residents of lower socioeconomic status. If I would have to guess, I'd say these areas probably differ in their proximity to the city proper, with cluster 1 describing more urban areas and cluster 2 describing more suburban areas.
-
-## Bonus: LDA with k-means clusters as target classes
-
-For bonus points, let's perform k-means on the original standardized Boston dataset, and then perform LDA using the clusters as target classes.
-
-```{r}
-# run k-mean with 3 clusters
-km3 <- kmeans(boston_scaled, centers = 3)
-
-# add the clusters as a variable to the data
-boston_scaled$cluster <- km3$cluster
-
-# run lda with clusters as the target
-lda.clust <- lda(cluster ~., data = boston_scaled)
-
-lda.clust
-
-# define the colors for the plot
-cols <- c("green", "blue", "purple")
-cols1 <- cols[boston_scaled$cluster]
-
-# plot the lda results
-plot(lda.clust, dimen= 2, col = cols1, pch = cols1)
-lda.arrows(lda.clust, myscale = 3)
-
-```
-
-The LDA seems to separate the clusters pretty well. From the plot we can see that the proportion of black residents is perhaps the most influential together with crime rate and proportion of non-retail business acres. Cluster 1 is best described as having a low proportion of black residents, low crime rate and low proportion of non-retail business acres. Cluster 2 also has low proportion of black residents and lower crime rate, but high proportion of non-retail business acres. Cluster 3 has higher proportion of black residents, high crime rate and high proportion of non-retail business acres.
-
