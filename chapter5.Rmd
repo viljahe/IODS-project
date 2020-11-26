@@ -1,0 +1,171 @@
+# Dimensionality reduction
+
+This week we learned about dimensionality reduction techniques, such as principal component analysis and multiple correspondence analysis.
+
+```{r results='hide', message = FALSE}
+# load the necessary packages and set scientific notation off
+
+options(scipen = 999)
+
+library("dplyr")
+library("GGally")
+library("tidyr")
+
+```
+
+
+## Overview of the data
+
+In this week analyses we use a data set that combines the Human Development Index and Gender Inequality Index data sets. More information can be found here: http://hdr.undp.org/en/content/human-development-index-hdi
+
+    
+```{r}
+
+# load the data
+human <- read.csv("~/Desktop/kurssit-syksy-2020/IODS-project/data/human.csv", row.names = 1)
+
+# summaries
+summary(human)
+
+
+```
+The data consists of 155 countries and 8 variables that reflect human development and gender inequality:
+
+  * `edu.ratio` is the ratio of the precentage of women to the percentage of men with some secondary education
+  * `lab.ratio` is the ratio of the percentage of women to the percentage of men over the age 15 in labour force
+  * `life.exp` is life expectancy at birth in years
+  * `edu.exp` is expected years of schooling
+  * `gni`  is the gross national income (GNI) per capita
+  * `mmr` is maternal mortality ratio
+  * `birthrate` is adolescent birth rate
+  * `parliament` is the percentage of seats in parliament held by women
+    
+Let's have closer look at the distributions of and relationships between the variables.
+ 
+```{r results='hide', fig.keep='all', message = FALSE, fig.height=6, fig.width=9}
+
+# graphical overview
+plot1 <- ggpairs(human, 
+             mapping = aes(alpha = 0.1),
+             lower = list(continuous = wrap("points", size = 0.5)),
+             upper = list(continuous = wrap("cor", size = 3)),
+             ) + 
+  theme_bw() + 
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(size=4), 
+        axis.text.y = element_text(size=5))
+
+plot1
+```
+
+We can see that in most countries the ratio of women to men with some second degree education is close to 1, which means that almost equal proportion of women and men have secondary education. The labour force ratio, on the other hand, has it's peak a bit below 1, so a larger proportion men participate in the labour force compared to women. Life expectancy is most commonly around 70-80 years, with an understandable left skew as human lifespan is limited. The expected years of schooling seems to be quite normally distributed, with most common values around 10-15 years. The GNI has a heavy right skew, only couple of countries reaching GNI over 50 000 per capita. Maternal mortality ratio and adolescent birth rate are also skewed to the right, with low values being the most prevalent. Finally, the percentage of parliamentary seats held by women is well below 50 % in most countries.\
+
+The secondary education gender ratio seems to correlate with all other variables expect the labour force participation gender ratio and proportion of women in the parliament. Countries with a higher proportion of women with secondary education tend to have higher life expectancy, expected education, and GNI, as well as lower maternal mortality and adolescent birth rate. Higher proportion of women participating in the labour force is associated with higher maternal mortality (which seems counter intuitive and might be some sort of statistical fluke) and higher proportion of women in the parliament. Higher life expectancy is associated with higher expected education and higher GNI, and lower maternal mortality, and adolescent birth rate. Countries with higher GNI tend to have lower maternal mortality and adolescent birth rate, and high maternal mortality is associated with high adolescent birth rate.
+
+## Principal component analysis
+
+Let's run a principal component analysis on the human development data.
+
+```{r}
+
+# perform principal component analysis (with the SVD method)
+pca_human <- prcomp(human)
+summary_human <- summary(pca_human)
+summary_human
+```
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 1. The first two component of PCA on unstandardized data. The 1st component explains 100 % of the variability and is largely determined by the GNI: countries with higher GNI place to the left side of the plot."}
+
+# extract the variances captured for the plot
+pca_pr1 <-round(100 * summary_human$importance[2, ], digits = 1)
+pcalab1 <- paste0(names(pca_pr1), "(",pca_pr1, "%)")
+
+# plot
+biplot(pca_human, choices = 1:2, cex = c(0.5, 0.6), col = c("grey80", "black"), xlab = pcalab1[1], ylab = pcalab1[2])
+
+```
+\
+Well, this seems messy. The first component captures 99.99 % of the variance, and the GNI seems to be the only variable with really any effect. This is because PCA is sensitive to the scaling of the variables: features with large variance are assumed to be more important than those with small variance. And the GNI, as it is on a completely different scale than the rest of the variables with values ranging from hundreds to hundreds of thousands, most definitely has the largest variance in our data. It's probably better to standardize the data so that the scales are comparable.
+
+```{r}
+
+# Standardize the dataset
+human_std <- scale(human)
+
+# perform pca to the standardized data
+pca_humanstd <- prcomp(human_std)
+summary_humanstd <- summary(pca_humanstd)
+summary_humanstd
+```
+
+```{r results='hide', fig.keep='all', message = FALSE, fig.height=6, fig.width=9, fig.cap= "Figure 2. The first two component of PCA on standardized data. The 1st component explains 53.6 % of the variability and is determined by the GNI, expected years of schooling, life expectancy, the ratio of the percentages of women to men with some sencondary education, maternal mortality, and adolescent birthrate. The second component explains 16.2 % of the variability, and is determined by the percentage of parliamentary seats held by women, and the ratio of the percentages of women to men in labour force."}
+
+# extract the variances captured for the plot
+pca_pr2 <-round(100 * summary_humanstd$importance[2, ], digits = 1)
+pcalab2 <- paste0(names(pca_pr2), "(",pca_pr2, "%)")
+
+# plot
+biplot(pca_humanstd, choices = 1:2, cex = c(0.5, 0.6), col = c("grey80", "black"), xlab = pcalab2[1], ylab = pcalab2[2])
+
+```
+\
+This looks better. Now that the variables are on a comparable scales, the first components explains 53.61 % of the variability, the second 16.24 %, and the rest of the six components explain less than 10 % each.\
+
+The first principal component is defined by two sets of variables: expected education, life expectancy, secondary education ratio, and the GNI one one hand, and maternal mortality and adolescent birthrate on the other hand. Countries that place higher on the first principle component have lower life expectancy, expected education, GNI, and less women with secondary education compared to men, and also high maternal mortality and adolescent birthrate. The second principal component reflects the labour force participation gender ratio and proportion of women in the parliament. The lower the country is placed on the second principal component, the lower proportion of women they have in the parliament and the labour force. So roughly speaking, in the upper left corner, we have countries that do well on the human development and gender equality indicators, and in the bottom right we would have countries that don't do so well in terms of human development or gender equality.\
+
+The two components could perhaps be labeled well-being and development (1st component) and equal gender representation (2nd component). Although the gender ratio of secondary education could be thought of as an indicator of gender equality, it contributes clearly to the 1st component together with more "general" indicators of development and well-being. This is somewhat surprising, but perhaps the gender equality in secondary education tells us more about the availability of education in general, and gender representation in the parliament and labour force are a better measure of gender equality. If we look at the countries that place to the left on the first component but not very high on the second component, we can see that there are such countries as Japan and Korea: developed countries where traditional gender roles still largely hold.
+
+## Multiple correspondence analysis
+
+Multiple correspondence analysis is a dimensionality reduction technique that can be used when data consists of categorical variables. We can try this out with the `tea` data set from the `FactoMineR` package.
+
+```{r}
+
+# install and load package Factominer
+require(FactoMineR)
+
+# load the dataset ´tea´
+data(tea)
+
+# structure and dimensions of the data
+str(tea)
+dim(tea)
+
+```
+
+The data contains 300 observations, and 36 variables that reflect some tea related habits and some background information. Unfortunately there is very little information available about the exact nature of these variables, or at least I couldn't find any. Anyway, we can examine the categorical variables (all but `age`) more closely with barplots.
+
+```{r results='hide', fig.keep='all', message = FALSE, fig.height=6, fig.width=9, warning=F}
+
+# visualize the data
+gather(tea[,1:12]) %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() + theme(axis.text.x = element_text(angle=45, hjust = 1, size = 8))
+
+gather(tea[,c(13:18, 20:25)]) %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() + theme(axis.text.x = element_text(angle=45, hjust = 1, size = 8))
+
+gather(tea[,26:36]) %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() + theme(axis.text.x = element_text(angle=45, hjust = 1, size = 8))
+
+```
+\
+As the data has so many variables, we can choose a couple to run the MCA with. I decided to go with the variables which I could actually interpret in the absence of proper data documentation, and which seemed to make at least some sense to examine together. I chose the variables `Tea` reflecting whether the person prefers black, Earl Grey, or green tea; the very confusingly named `How` and `how` reflecting whether the person likes their tea plain, with lemon, milk, or something other, and if they use bags, loose leaf or both (respectively); `sugar` which tells us whether or not person drinks their tea with sugar; and `where` reflecting whether the person buys their tea from chain store, tea shop, or both.
+
+```{r}
+
+# As the data contains a lot of variables, let's choose only some for easier interpretations
+
+new.tea <- subset(tea, select = c("Tea", "How", "sugar", "how", "where"))
+
+# MCA
+mca <- new.tea %>%  MCA(graph = FALSE)
+summary(mca)
+
+# plot the 
+plot(mca, invisible=c("var"))
+
+plot(mca, invisible=c("ind"), habillage = "quali")
+
+```
+\
+From the first plot we can see how individuals place on the first two dimension. There might be some clustering visible, perhaps one group that is located near the middle on both dimension, second that is higher on the second dimension, a third high on the first dimension but low on the second dimension.\
+\
+From the second plot we can see how the variables contribute to the dimensions and relate to each other. The first two dimensions account for 16.76 and 15.44 % of the variance. We can see, that buying tea from both, chain store and tea shop and buying both, bags and loose leaf are associated, as are buying tea from tea shop and loose leaf only. They also separate individuals in the second dimension as the two groups are far away from each other in that dimension. Those who use tea bags from chain store are far away from the loose leaf from tea shop persons on the first dimension. The rest of the variables are cluster together pretty closely, except for green tea and the "other" additions to the tea (I still have little clue what this category could contain) which both seem to be linked to the second dimension. If I'm interpreting this correctly, I think we might see some separation between the fancy tea drinkers who like loose leaf from tea shops, the "anything goes" who mix bags and loose leaf from chain stores and tea shops and enjoy it with some mystery condiments, and the regular every day tea drinkers who prefer bags from chain stores and the more common condiments.
+

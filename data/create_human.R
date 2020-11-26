@@ -28,3 +28,59 @@ gii_hd <- inner_join(gii, hd, by = "country")
 # save the data in the data-folder
 write.csv(gii_hd, file = "~/Desktop/kurssit-syksy-2020/IODS-project/data/human.csv", row.names = F)
 
+# Week 5: data wrangling part
+
+# load the data, examine structure and dimensions
+human <- read.csv("~/Desktop/kurssit-syksy-2020/IODS-project/data/human.csv")
+
+str(human)
+dim(human)
+
+# The data consists of two original data sets that consist of indicators for long and 
+# healthy life, knowledge, living standards, and gender inequality for various countries/areas.
+
+# The variables are:
+# "gii.rank": gender inequality index (GII) rank
+# "country": country
+# "gii": gender inequality index (GII)
+# "mmr": maternal mortality ratio
+# "birthrate": adolescent birth rate
+# "parliament": the percentage of seats in parliament held by women
+# "edu.f": the percentage of women with some secondary education
+# "edu.m": the percentage of men with some secondary education
+# "lab.f": the percentage of women aged 15 and older in the labour force     
+# "lab.m": the percentage of men aged 15 and older in the labour force 
+# "edu.ratio": ratio of women/men with some secondary education (calculated from edu.f and edu.m)
+# "lab.ratio": ratio of women/men in the labour force (calculated from lab.f and lab.m)
+# "hdi.rank": the human development index (HDI) rank
+# "hdi": the human development index (HDI)
+# "life.exp": life expectancy at birth (years)
+# "edu.exp": expected years of schooling
+# "edu.mean": mean years of schooling
+# "gni": gross national income (GNI) per capita
+# "rank.diff": the GNI per capita rank minus HDI rank
+
+# transform GNI to numeric
+require(stringr)
+human$gni <- str_replace(human$gni, pattern=",", replace ="") %>% as.numeric
+
+# exclude unneeded variables
+keep <- c("country", "edu.ratio", "lab.ratio", "life.exp", "edu.exp", "gni", "mmr", "birthrate", "parliament")
+
+human <- select(human, all_of(keep))
+
+# remove rows with missing values
+comp <- complete.cases(human)
+human <- filter(human, comp == TRUE)
+
+# remove obs related to regions, not countries
+human <- human[1:(nrow(human)-7), ]
+
+# row names = countries
+rownames(human) <- human$country
+human <- select(human, -"country")
+
+dim(human)
+
+# save data
+write.csv(human, file = "~/Desktop/kurssit-syksy-2020/IODS-project/data/human.csv", row.names = T)
