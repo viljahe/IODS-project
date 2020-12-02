@@ -1,0 +1,366 @@
+# Analysis of longitudinal data
+
+This week we learned about wrangling and analysing longitudinal data.
+
+```{r results='hide', message = FALSE}
+# load the necessary packages and set scientific notation off
+
+options(scipen = 999)
+
+library("dplyr")
+library("ggplot2")
+library("tidyr")
+library("lme4")
+
+```
+
+
+## Overview of the data
+
+In this week analyses we used two datasets `RATS` and `BPRS`, which have been transformed to long format in the data wrangling exercise.
+
+    
+```{r}
+
+# load the data sets
+RATS <- read.csv("~/Desktop/kurssit-syksy-2020/IODS-project/data/RATSL.csv", row.names = 1)
+BPRS <- read.csv("~/Desktop/kurssit-syksy-2020/IODS-project/data/BPRSL.csv", row.names = 1)
+
+```
+
+```{r}
+
+str(RATS)
+summary(RATS)
+
+```
+
+The `RATS` data consists of 16 rats observed at `r length(unique(RATS$Time))` timepoints. The variable `Weight` is the rats' observed weight at each time point.
+
+
+```{r}
+
+str(BPRS)
+summary(BPRS)
+
+```
+
+The `BPRS` data consists of 40 individuals in two treatment groups (20 in each) observed at the beginning of the treatment period (week 0) and the subsequent 8 weeks. The variable `bprs` is the score on the brief psychiatric rating scale (BPRS) which assesses 18 symptoms related to schizophrenia on a scale of 1 (not present) to 7 (extremely severe).
+
+## Graphical displays of the RATS data
+
+### Individual response profiles
+
+First we can plot each individual rat's weight across timepoints by groups.
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 1. Individual response profiles by group."}
+
+# Change ID and Group to be factors
+RATS <- mutate(RATS, ID = as.factor(ID), Group = as.factor(Group))
+
+# Plot individual response profiles
+ggplot(RATS, aes(x = Time, y = Weight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(RATS$Weight), max(RATS$Weight))) +
+  scale_x_continuous(name = "Time (days)", breaks = seq(0,60,10))
+  
+
+
+```
+
+We can already see some differences between groups and general trends from this plot. First, it looks like weight goes up as time goes on for almost all rats. Second, there is a visible difference between group 1 and the other two groups: rats in group 1 seem to be much lighter than in the other two groups, and the variance within the group is smaller. Third, rats with lower starting weight also have lower weight at the end of the observation period. This phenomenon, *tracking*, makes it hard to see if there is a difference in weight gain between the groups.\
+
+We can standardize the data, so that mean of the values for the relevant timepoint is subtracted from each observation, and then divided by standard deviation of the observations at that timepoint This will make the tracking more visible, as each observation then reflects by how many standard deviations it differs from the mean for the relevant timepoint
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 2. Individual response profiles by group, standardized."}
+
+# Standardize
+RATS_std <- RATS %>% 
+  group_by(Time) %>% 
+  mutate(stdweight = (Weight- mean(Weight))/sd(Weight)) %>% 
+  ungroup()
+
+# Plot standardized profiles
+ggplot(RATS_std, aes(x = Time, y = stdweight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(RATS_std$stdweight), max(RATS_std$stdweight)), name = "Standardized weight") +
+  scale_x_continuous(name = "Time (days)", breaks = seq(0,60,10))
+
+
+```
+From this plot, we can see how rats in group 1 are clearly below the mean throughout the observation period, while rats in group 2 and 3 are well above it. The one rat in group 2 seems to be somewhat an outlier in that group: while all other rats in group 2 seem to be somewhat lighter than those in group 3, it's the heaviest of all rats.
+
+### Group profiles
+
+Sometimes it's more useful to plot group averages, instead of individual profiles. This is especially true when there are a large number of observations. Although the `RATS` data isn't that huge, it can help us see possible differences between the groups more clearly.\
+
+First, let's plot the mean weight at each time point for each group, with standard errors.
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 3. Mean response profiles for the three groups."}
+
+# Number of timepoints, baseline included
+n <- RATS$Time %>% unique() %>% length()
+
+# Summary data with mean and standard error of weight by group and timepoint 
+RATS_sum1 <- RATS %>%
+  group_by(Group, Time) %>%
+  summarise(mean = mean(Weight), se = sd(Weight)/sqrt(n) ) %>%
+  ungroup()
+
+# Glimpse the data
+glimpse(RATS_sum1)
+
+# Plot the mean profiles
+ggplot(RATS_sum1, aes(x = Time, y = mean, linetype = Group, shape = Group)) +
+  geom_line() +
+  scale_linetype_manual(values = c(1:3)) +
+  geom_point(size=3) +
+  scale_shape_manual(values = c(1,2,4)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se, linetype="1"), width=0.3) +
+  theme(legend.position = "right") +
+  scale_y_continuous(name = "Mean weight") + 
+  scale_x_continuous(name = "Time (days)", breaks = seq(0,60,10))
+
+```
+From this plot, we can again see that rats in group 1 weigh clearly less than rats in the two other groups across timepoints. Group 2 also seems to be more clearly less heavy throughout the observation period compared to group 3, as the two group profiles don't seem to overlap. As the variability in group 2 was larger than the other two groups, the associated standard errors are also larger in this plot.\
+
+We can also visualize the same group profiles with side-by-side boxplots, which can give us a better understanding of the distributions and possible outliers in the groups.
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 4. Boxplots of weight at each timepoint by group."}
+
+# Plot the mean profiles
+ggplot(RATS, aes(x = as.factor(Time), y = Weight, col = factor(Group))) +
+  geom_boxplot(outlier.colour = NULL) +
+  scale_shape_manual(values = c(1,2,4)) + 
+  labs(x = "Time (days)", col = "Group")
+  
+
+```
+Now we can see that there are some outliers in each group. Group 1 is still clearly separate from all other groups, but there is some slight overlap between groups 2 and 3 at some timepoints.\
+
+## Summary measure approach in the RATS data
+
+The summary measure approach is a straightforward way to analyse longitudinal data: the repeated measurements are transformed into a single value capturing some of the essential features of the responses over time, and then univariate methods are applied to these summary variables.\
+
+Here, we will look at the average weight after the initial measurement, e.g. from timepoint 1 onwards. We can visualize the differences between groups with regards to this summary variable with boxplots.
+
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 5. Boxplots of mean weight over timepoints by group."}
+
+# Create a summary data by treatment and subject with mean as the summary variable (ignoring baseline week 0).
+RATS_sum2 <- RATS %>%
+  filter(Time > 1) %>%
+  group_by(Group, ID) %>%
+  summarise(mean=mean(Weight)) %>%
+  ungroup()
+
+# Glimpse the data
+glimpse(RATS_sum2)
+
+# Draw a boxplot of the mean versus treatment
+ggplot(RATS_sum2, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "Mean weight")
+
+```
+From this boxplot we can see that there are overall differences in weight between the groups: rats in group 1 are on average the lightest, and rats in group 3 are on average the heaviest, while rats in group 2 fall between the two other groups. The distributions in groups 2 and 3 are quite heavily skewed, and the variability is much largere in group 2 compared to the other two groups. There are also three outliers, one in each group. We can try to remove these outliers, and see how the data looks like without them.
+
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 5. Boxplots of mean weight over timepoints by group, outliers removed."}
+
+# Create a new data by filtering the outliers
+RATS_sum3 <- RATS_sum2 %>% 
+  group_by(Group) %>% 
+  filter(!(mean == min(mean) & Group == 1), 
+         !(mean == max(mean) & Group == 2), 
+         !(mean == min(mean) & Group == 3)) %>% 
+  ungroup()
+
+# Check that filtering worked, data should have 13 rows now
+glimpse(RATS_sum3)
+
+# Plot again 
+ggplot(RATS_sum3, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "Mean weight")
+
+```
+The group differences are even more clear now with the outliers removed. We can also formally test the group differences: as we have more than two groups and the group sizes are very unequal ($n_{group1} = 7, n_{group2} = 3, n_{group3} = 3$) a t-test is not the best option. Instead, we can test the group differences with one-way ANOVA, using the data without the outliers.
+
+```{r}
+
+testRats <- aov(mean ~ Group, data = RATS_sum3)
+summary(testRats)
+
+```
+
+From the summary of the ANOVA we can see that there is indeed significant differences between the groups ($F(2, 10) = 2577, p < .001$). This does not yet tell us between which groups there are significant differences, but we can find out with Tukey HSD test.  
+
+```{r}
+
+TukeyHSD(testRats)
+
+```
+It seems that all groups differ from each other ($ps < .001$). Group 3 and group 1 differ most, with the difference between the average weight in these two groups being 269.3, and groups 2 and 3 the least, with the difference being only 87.3.
+
+## Linear Mixed Effects Models for BPRS data
+
+Linear mixed effects models are better suited for analyzing longitudinal data, as they make it possible to take into account some unobserved variables that are likely to influence individual's pattern of responses. Therepeated measures of the same individual are usually positively correlated, and this correlation is probably influenced by natural variation in idividuals' propensity to respond (between-individual heterogeneity) and underlying (biological) processes that lead to random deviations from individuals' response trajectories (within-individual biological variation). For example, in our `BPRS` data, between-individual heterogeneity could be introduced by some individuals' innate or genetic features that make them more vulnerable to more severe schizophrenia, and within-individual biological variation could be introduced by simple natural fluctuation of symptoms of mental illness (e.g. as time goes on, symptoms tend to increase and decrease even in the absence of any intervention).
+
+### Independence model
+
+```{r}
+
+# Change treatment and subject to factor
+BPRS <- mutate(BPRS, treatment = as.factor(treatment), subject = as.factor(subject))
+
+# Create ID, since there are no individual identifiers in the data, but the subject numbers range from 1-20 in both groups
+BPRS <- mutate(BPRS, ID = paste0(treatment, ".", subject))
+```
+
+Let's first examine the BPRS scores across time by group, ignoring the longitudinal nature of the data, and then plot the individual response profiles by group.
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 6. Scatterplot of the BPRS scores by group."}
+
+# Plot the BPRS scores by group
+ggplot(BPRS, aes(x = week, y = bprs, col = treatment)) +
+  geom_point(position = position_jitter(width=.1,height=.1)) +
+  scale_x_continuous(name = "Week") +
+  theme(legend.position = "top")
+
+```
+The two groups don't seem to be very well defined, i.e. there are no clear visible differences between the groups based on this plot. We can further examine the possible group differences by fitting a multiple linear model to the data, still ignoring the longitudinal nature of the data. This is also called an independence model.
+
+```{r}
+
+# fit model to the data
+BPRS_reg <- lm(bprs ~ week + treatment, data = BPRS)
+summary(BPRS_reg)
+
+```
+
+The treatment group does not seem to have a statistically significant effect, but time does ($B = -2.27, p < .001$): as time goes on, the BPRS score decreases by approximately 2 points per week.\
+
+### Random intercept model
+
+As a simple linear regression assumes that the repeated measures are independent and this is highly unlikely, it is better to use a model that takes the longitudinal nature of the data into account. First, let's plot the individual response profiles, taking into account the longitudinal nature of the data.
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 7. Individual response profiles by group."}
+
+# Plot the individual profiles by group
+ggplot(BPRS, aes(x = week, y = bprs, group = ID)) +
+  geom_line(aes(col=treatment)) +
+  scale_x_continuous(name = "Week") +
+  theme(legend.position = "top")
+
+```
+
+The two groups do not seem to differ based on this plot either. Let's then fit a random intercept model to the data, which allows each subject to differ in the intercept. We can use the function `lmer` from package `lme4`.
+
+```{r}
+
+# Fit the model using the previously created variable ID as indicator of individual subjects
+BPRS_ref <- lmer(bprs ~ week + treatment + (1|ID), data = BPRS, REML = F)
+summary(BPRS_ref)
+
+```
+
+The main results remain the same as in the linear regression model above: the estimates for intercept, time, and treatment group are unchanged. However, the standard errors are different. Standard error for the intercept and treatment group are larger, and for the time smaller. Time is a within-subject covariate, and the independence model ignores the within-subject dependencies leading to standard errors that are larger than they should be. In contrast, the treatment group is a between-subject effect and the smaller standard errors of the independence model are due to the inflated sample size of that model since it ignores the correlated nature of the observations.
+
+### Random intercept and slope model
+
+Next, we can fit a random intercept and slope model which allows both the intercept and slope differ between each subject
+
+```{r}
+
+# Fit the model
+BPRS_ref1 <- lmer(bprs ~ week + treatment + (week|ID), data = BPRS, REML = F)
+summary(BPRS_ref1)
+
+```
+
+The results are again very similar to the random intercept model above. This time, the estimate for treatment is a bit larger. We can use likelihood ratio test to see which of our two models, the random intercept model or the random intercept and slope model fits the data better.
+
+```{r}
+
+anova(BPRS_ref, BPRS_ref1)
+
+```
+
+The two models are significantly different in their fit, the random intercept and slope model fits the data better ($\chi^2(2) = 63.66, p < .001$).\
+
+Lastly, let's improve the model further by fitting a random intercept and slope model that also allows for a group x time interaction.
+
+```{r}
+
+BPRS_ref2 <- lmer(bprs ~ week + treatment + (week|ID) + (week * treatment), data = BPRS, REML = F)
+summary(BPRS_ref2)
+
+```
+The estimate for treatment is again a bit larger, but the standard deviation is also larger. The treatment group 2 seems to have somewhat lower BPRS scores compared to the treatment group 1, but the associated t-value is quite low and standard error is quite large, so this effect might not be statistically significant. The estimate for week x treatment interaction shows that in the treatment group 2 time has a positive effect leading to somewhat higher BPRS scores compared to treatment group 1.\
+
+From the output, we cannot see the statistical significance but we can calculate the 95 % confidence interval from the estimates and standard errors, which gives us a bit more insight to the significance of these effects: 
+
+* for time, the 95 % CI is $-2.6283 \pm (1.96 * 0.3752) = [-3.3637, -1.8929]$
+* for the treatment group, the 95 % CI is $-2.2911 \pm (1.96 * 4.2200) = [-10.5623, 5.9801]$, 
+* for the week x treatment interaction, the 95 % CI is $0.7158 \pm (1.96 * 0.5306) = [-0.3242, 1.7558]$. 
+
+So, while time seems to have an effect on the BPRS score (scores get lower as time goes on by approximately 2-3 points per week), treatment group or the time x treatment group interaction do not seem to have an effect on the BPRS score.\
+
+We can check if this model with the interaction fits the data better than the previous model without the interaction:
+
+```{r}
+
+anova(BPRS_ref1, BPRS_ref2)
+
+```
+The random intercept and slope model with the interaction included does not seem to fit the data statistically significantly better than the one without the interaction ($\chi^2(1) = 1.78, p = 0.182$). This makes sense, as the interaction, as previously noted, did not seem to be statistically significant.\
+
+The very last thing we can do is plot the observed values, and the fitted values from the two last models side by side to compare them:
+
+```{r results='hide', fig.keep='all', message = FALSE, warning=F, fig.height=6, fig.width=9, fig.cap= "Figure 8. Side by side comparison of the observed and fitted values."}
+
+fitted1 <- fitted(BPRS_ref1)
+fitted2 <- fitted(BPRS_ref2)
+
+
+BPRS <- mutate(BPRS, fitted1 = fitted1, fitted2 = fitted2) 
+
+p1 <- ggplot(BPRS, aes(x = week, y = bprs, group = ID)) +
+  geom_line(aes(linetype = treatment)) +
+  scale_x_continuous(name = "Time (weeks)") +
+  scale_y_continuous(name = "The BPRS score") +
+  theme(legend.position = "top") +
+  ggtitle("Observed values") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(BPRS, aes(x = week, y = fitted1, group = ID)) +
+  geom_line(aes(linetype = treatment)) +
+  scale_x_continuous(name = "Time (weeks)") +
+  scale_y_continuous(name = "Fitted BPRS score ") +
+  theme(legend.position = "top") +
+  ggtitle("Fitted values (no interaction)") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(BPRS, aes(x = week, y = fitted2, group = ID)) +
+  geom_line(aes(linetype = treatment)) +
+  scale_x_continuous(name = "Time (weeks)") +
+  scale_y_continuous(name = "Fitted BPRS score") +
+  theme(legend.position = "top") +
+  ggtitle("Fitted values (with interaction)") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+library(gridExtra)
+grid.arrange(p1,p2,p3, ncol= 3)
+
+```
+
+The fitted values from the last two model seem virtually identical. There is some similarity with the observed values but (unsurprisingly perhaps) they don't really seem to capture the actual observed values in the case of less linear trajectories all that well.
